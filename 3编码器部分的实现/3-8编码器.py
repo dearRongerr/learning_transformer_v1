@@ -218,6 +218,27 @@ class EncoderLayer(nn.Module):
         x = self.sublayer[0](x,lambda x:self.self_attn(x,x,x,mask))
         return self.sublayer[1](x,self.feed_forward)
 
+
+# 构建编码器类Encoder
+class Encoder(nn.Module):
+    def __init__(self, layer,N):
+        # layer ： 代表编码器层
+        # N ： 代表编码器中有几个layer       
+        super(Encoder,self).__init__()
+        # 首先使用clones函数克隆N个编码器层放在self.layers中
+        self.layers = clones(layer,N)
+        # 初始化一个规范化层，它将用在编码器的最后面
+        self.norm = LayerNorm(layer.size)
+
+    def forward(self,x,mask):
+        # x代表上一层的输出
+        # mask代表掩码张量
+        # 首先对克隆的编码器层进行循环，每次都会得到一个新的x
+        # x依次经历N个编码器层的处理，最后再经过规范化层就可以输出了
+        for layer in self.layers:
+            x = layer(x,mask)
+        return self.norm(x)
+
 # 实例化参数
 d_model = 512
 dropout = 0.1
@@ -300,6 +321,26 @@ mask = Variable(torch.zeros(8,4,4))
 
 el = EncoderLayer(size,self_attn,ff,dropout)
 el_result = el(x,mask)
-print(el_result)
-print(el_result.shape)
 
+# ========编码器类========
+# 第一个实例化参数layer，它是一个编码器层的实例化对象，因为需要传入编码器层的参数
+# 又因为编码器层中的子层是不共享的，因此需要使用深度拷贝各个对象
+size = 512
+head = 8
+d_model = 512
+d_ff = 64
+c = copy.deepcopy
+attn = MultiHeadedAttention(head,d_model)
+ff = PositionwiseFeedForward(d_model,d_ff,dropout)
+dropout = 0.2
+# 编码器层
+layer = EncoderLayer(size,c(attn),c(ff),dropout)
+
+# 编码器中编码器层的个数N
+N = 8
+mask = Variable(torch.zeros(8,4,4))
+# 编码器
+en = Encoder(layer,N)
+en_result = en(x,mask)
+print(en_result)
+print(en_result.shape)
