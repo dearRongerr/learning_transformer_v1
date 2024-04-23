@@ -563,3 +563,4 @@ from pyitcast.transformer_utils import SimpleLossCompute
 from pyitcast.transformer_utils import run_epoch
 from pyitcast.transformer_utils import greedy_decode
 
+def data
