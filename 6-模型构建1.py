@@ -442,9 +442,6 @@ source_mask = target_mask = mask
 
 de = Decoder(layer,N)
 de_result = de(x,memory,source_mask,target_mask)
-print(de_result)
-print(de_result.shape)
-
 
 # ===== 输出部分实现
 class Generator(nn.Module):
@@ -466,5 +463,103 @@ x = pe_result
 
 gen = Generator(d_model,vocab_size)
 gen_result = gen(x)
-print(gen_result)
-print(gen_result.shape)
+
+# 构建编码器-解码器结构类
+class EncoderDecoder(nn.Module):
+    def __init__(self,encoder,decoder,source_embed,target_embed,generator):
+        # encoder : 代表编码器对象
+        # decoder ： 代表解码器对象
+        # source_embed:代表源数据的嵌入函数
+        # target_embed:代表目标数据的嵌入函数
+        # generator:代表输出部分类别生成器对象
+        super(EncoderDecoder,self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = source_embed
+        self.tgt_embed = target_embed
+        self.generator = generator
+
+    def forward(self,source,target,source_mask,target_mask):
+        # source:代表源数据
+        # target：代表目标数据
+        # source_mask:代表源数据的掩码张量
+        # target_mask:代表目标数据的掩码张量
+        return self.decode(self.encode(source,source_mask),source_mask,
+                           target,target_mask)
+    def encode(self,source,source_mask):
+        return self.encoder(self.src_embed(source),source_mask)
+    def decode(self,memory,source_mask,target,target_mask):
+        # memory：代表经历编码器编码后的输出张量
+        return self.decoder(self.tgt_embed(target),memory,source_mask,target_mask)
+    
+
+vocab_size = 1000
+d_model = 512
+encoder = en
+decoder = de
+source_embed = nn.Embedding(vocab_size,d_model)
+target_embed = nn.Embedding(vocab_size,d_model)
+generator = gen
+
+source = target = Variable(torch.LongTensor([[100,2,421,508],[491,998,1,221]]))
+
+source_mask = target_mask = Variable(torch.zeros(8,4,4))
+
+ed = EncoderDecoder(encoder,decoder,source_embed,target_embed,generator)
+ed_result = ed(source,target,source_mask,target_mask)
+# print(ed_result)
+# print(ed_result.shape)
+
+def make_model(source_vocab,target_vocab,N=6,d_model=512,d_ff=2048,head=8,dropout=0.1):
+    # source_vocab:源数据中的词汇总数
+    # target_vocab：目标数据中的词汇总数
+    # N：代表编码器和解码器堆叠的层数
+    # d_model:代表词嵌入的维度
+    # d_ff :代表前馈全连接层中变换矩阵的维度
+    # head：多头注意力机制中的头数
+    # dropout：置零比率
+    c = copy.deepcopy
+
+    # 实例化一个多头注意力的类
+    attn = MultiHeadedAttention(head,d_model)
+
+    # 实例化一个前馈全连接层的网络对象
+    ff = PositionwiseFeedForward(d_model,d_ff,dropout)
+
+    # 实例化一个位置编码器
+    position = PositionalEncoding(d_model,dropout)
+
+    # 实例化模型model，利用的是EncoderDecoder类
+    # 编码器的结构中有2个子层，attention层和前馈全连接层
+    # 解码器的结构中有3个子层，2个attention层和前馈全连接层
+    model = EncoderDecoder(
+        Encoder(EncoderLayer(d_model,c(attn),c(ff),dropout),N),
+        Decoder(DecoderLayer(d_model,c(attn),c(attn),c(ff),dropout),N),
+        nn.Sequential(Embeddings(d_model,source_vocab),c(position)),
+        nn.Sequential(Embeddings(d_model,target_vocab),c(position)),
+        Generator(d_model,target_vocab)
+    )
+    # 初始化整个模型中的参数，判断参数的维度大于1，将矩阵初始化成一个服从均匀分布的矩阵
+    for p in model.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform(p)
+
+    return model
+
+
+source_vocab = 11
+target_vocab  =11
+N = 6
+
+# if __name__ == '__main__':
+#     res = make_model(source_vocab,target_vocab,N)
+#     print(res)
+    
+
+from pyitcast.transformer_utils import Batch
+from pyitcast.transformer_utils import get_std_opt
+from pyitcast.transformer_utils import LabelSmoothing
+from pyitcast.transformer_utils import SimpleLossCompute
+from pyitcast.transformer_utils import run_epoch
+from pyitcast.transformer_utils import greedy_decode
+
